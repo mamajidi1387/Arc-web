@@ -1,0 +1,86 @@
+# Base44 sandbox dev environment — Arc WordPress site.
+#
+# Dev-oriented setup:
+#   * WordPress core and the database live in named volumes.
+#   * The editable theme source (wp-content/themes/arc-child) is bind-mounted
+#     from this repo, so edits here are picked up without rebuilding anything.
+#   * The site is served on host port 3000 (the preview entry point).
+
+services:
+  db:
+    image: mysql:8.0
+    restart: on-failure
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: wordpress-root
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    environment:
+      - "WORDPRESS_DB_HOST=db:3306"
+      - "WORDPRESS_DB_NAME=wordpress"
+      - "WORDPRESS_DB_USER=wordpress"
+      - "WORDPRESS_DB_PASSWORD=wordpress"
+      # Sandbox preview wiring (see AGENTS.md "Preview behaviour").
+      - BASE44_PREVIEW_MODE
+      - BASE44_PUBLIC_HOST_SUFFIX
+      # The preview is served through a proxy, so WordPress needs an explicit
+      # public URL instead of request-based detection.
+      # The preview is HTTPS-terminated at the proxy, so WordPress must always
+      # build https URLs or the browser blocks the stylesheet as mixed content.
+      - "WORDPRESS_CONFIG_EXTRA=define('WP_ENVIRONMENT_TYPE', 'local'); define('FS_METHOD', 'direct'); define('WP_HOME', 'https://3000-${BASE44_PUBLIC_HOST_SUFFIX}'); define('WP_SITEURL', 'https://3000-${BASE44_PUBLIC_HOST_SUFFIX}'); define('WP_DEBUG', true); define('WP_DEBUG_DISPLAY', false); define('WP_DEBUG_LOG', true); if ('1' === getenv('BASE44_PREVIEW_MODE') || (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false)) { $$_SERVER['HTTPS'] = 'on'; }"
+    volumes:
+      - wp_data:/var/www/html
+      - ./wp-content/themes/arc-child:/var/www/html/wp-content/themes/arc-child
+      - ./wp-content/mu-plugins:/var/www/html/wp-content/mu-plugins
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$h=@get_headers('http://127.0.0.1/wp-login.php'); exit($$h?0:1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # On-demand WP-CLI for setup/content commands — not started by `up`.
+  # Usage: docker compose -f docker-compose.base44.yml run --rm wpcli wp <args>
+  wpcli:
+    image: wordpress:cli-php8.2
+    profiles: ["tools"]
+    # The wp-cli image runs as uid 82; the wordpress image owns the volume as
+    # uid 33, so match it or wp-cli cannot write to wp-content.
+    user: "33:33"
+    depends_on:
+      - wordpress
+    environment:
+      - "WORDPRESS_DB_HOST=db:3306"
+      - "WORDPRESS_DB_NAME=wordpress"
+      - "WORDPRESS_DB_USER=wordpress"
+      - "WORDPRESS_DB_PASSWORD=wordpress"
+      - BASE44_PUBLIC_HOST_SUFFIX
+    volumes:
+      - wp_data:/var/www/html
+      - ./wp-content/themes/arc-child:/var/www/html/wp-content/themes/arc-child
+      - ./wp-content/mu-plugins:/var/www/html/wp-content/mu-plugins
+    command: ["wp", "--info"]
+
+volumes:
+  db_data:
+  wp_data:
