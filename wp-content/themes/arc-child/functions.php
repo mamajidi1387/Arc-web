@@ -77,6 +77,7 @@ function arc_language_links() {
 }
 
 require_once get_stylesheet_directory() . '/inc/content.php';
+require_once get_stylesheet_directory() . '/inc/projects.php';
 
 /**
  * Theme supports and navigation locations.
@@ -112,7 +113,11 @@ function arc_child_assets() {
 	wp_enqueue_style( 'arc-theme', get_stylesheet_directory_uri() . '/assets/css/theme.css', array( 'arc-fonts' ), $version );
 	wp_enqueue_script( 'arc-theme', get_stylesheet_directory_uri() . '/assets/js/theme.js', array(), $version, true );
 }
-add_action( 'wp_enqueue_scripts', 'arc_child_assets' );
+// Priority 20: Hello Elementor enqueues reset.css/theme.css at the default
+// priority 10, but this child's functions.php loads first, so at priority 10
+// our stylesheet would print *before* the parent's and lose the cascade
+// (e.g. reset.css `[type=button]` rules overriding `.arc-theme-toggle`).
+add_action( 'wp_enqueue_scripts', 'arc_child_assets', 20 );
 
 /**
  * Sandbox preview only.

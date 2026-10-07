@@ -103,15 +103,7 @@ get_header();
 			<p class="arc-section__subtitle"><?php echo esc_html( $arc['portfolio']['subtitle'] ); ?></p>
 		</header>
 
-		<div class="arc-grid arc-grid--3">
-			<?php foreach ( $arc['portfolio']['items'] as $item ) : ?>
-				<a class="arc-work" href="<?php echo esc_url( $arc['portfolio']['all_url'] ); ?>">
-					<span class="arc-work__thumb" aria-hidden="true"></span>
-					<span class="arc-work__tag"><?php echo esc_html( $item['tag'] ); ?></span>
-					<span class="arc-work__title"><?php echo esc_html( $item['title'] ); ?></span>
-				</a>
-			<?php endforeach; ?>
-		</div>
+		<?php arc_render_projects( array( 'limit' => 3, 'columns' => 3 ) ); ?>
 
 		<div class="arc-section__foot">
 			<a class="arc-btn arc-btn--ghost" href="<?php echo esc_url( $arc['portfolio']['all_url'] ); ?>"><?php echo esc_html( $arc['portfolio']['all'] ); ?></a>
